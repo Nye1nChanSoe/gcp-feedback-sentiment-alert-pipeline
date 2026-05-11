@@ -18,25 +18,10 @@ substitutions:
 
 steps:
   # -----------------------------
-  # Create Pub/Sub topic
-  # -----------------------------
-  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
-    id: "create-feedback-topic"
-    entrypoint: "bash"
-    args:
-      - "-c"
-      - |
-        gcloud pubsub topics describe ${_FEEDBACK_TOPIC} \
-          --project=${_PROJECT_ID} >/dev/null 2>&1 \
-        || gcloud pubsub topics create ${_FEEDBACK_TOPIC} \
-          --project=${_PROJECT_ID}
-
-  # -----------------------------
   # Build ingest image
   # -----------------------------
   - name: "gcr.io/cloud-builders/docker"
     id: "build-ingest"
-    waitFor: ["create-feedback-topic"]
     args:
       - "build"
       - "-t"
@@ -78,7 +63,6 @@ steps:
   # -----------------------------
   - name: "gcr.io/cloud-builders/docker"
     id: "build-sentiment-handler"
-    waitFor: ["create-feedback-topic"]
     args:
       - "build"
       - "-t"
