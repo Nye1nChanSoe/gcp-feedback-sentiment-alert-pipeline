@@ -53,7 +53,7 @@ steps:
       - "--region=${_REGION}"
       - "--service-account=${_RUNTIME_SA}"
       - "--set-env-vars=PROJECT_ID=${_PROJECT_ID},FEEDBACK_TOPIC=${_FEEDBACK_TOPIC}"
-      - "--no-allow-unauthenticated"
+      - "--allow-unauthenticated"
       - "--memory=256Mi"
       - "--timeout=60s"
       - "--project=${_PROJECT_ID}"
