@@ -1,0 +1,191 @@
+substitutions:
+  _PROJECT_ID: "project-7abcab2d-24a7-4f5d-80a"
+  _REGION: "asia-southeast1"
+  _AR_REPO: "feedback-images"
+
+  _RUNTIME_SA: "feedback-pipeline-runtime-sa@project-7abcab2d-24a7-4f5d-80a.iam.gserviceaccount.com"
+
+  _FEEDBACK_TOPIC: "feedback-topic"
+  _POSITIVE_SUB: "positive-sub"
+  _NEGATIVE_SUB: "negative-sub"
+
+  _INGEST_SERVICE: "feedback-ingest-service"
+  _POSITIVE_SERVICE: "positive-feedback-handler"
+  _NEGATIVE_SERVICE: "negative-feedback-handler"
+
+  _FOLLOWUP_SECRET: "slack-followup-webhook"
+  _SUPPORT_SECRET: "slack-support-webhook"
+
+steps:
+  # -----------------------------
+  # Create Pub/Sub topic
+  # -----------------------------
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    id: "create-feedback-topic"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        gcloud pubsub topics describe ${_FEEDBACK_TOPIC} \
+          --project=${_PROJECT_ID} >/dev/null 2>&1 \
+        || gcloud pubsub topics create ${_FEEDBACK_TOPIC} \
+          --project=${_PROJECT_ID}
+
+  # -----------------------------
+  # Build ingest image
+  # -----------------------------
+  - name: "gcr.io/cloud-builders/docker"
+    id: "build-ingest"
+    waitFor: ["create-feedback-topic"]
+    args:
+      - "build"
+      - "-t"
+      - "${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_AR_REPO}/feedback-ingest:latest"
+      - "./ingest"
+
+  # -----------------------------
+  # Push ingest image
+  # -----------------------------
+  - name: "gcr.io/cloud-builders/docker"
+    id: "push-ingest"
+    waitFor: ["build-ingest"]
+    args:
+      - "push"
+      - "${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_AR_REPO}/feedback-ingest:latest"
+
+  # -----------------------------
+  # Deploy ingest service
+  # -----------------------------
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    id: "deploy-ingest"
+    waitFor: ["push-ingest"]
+    args:
+      - "gcloud"
+      - "run"
+      - "deploy"
+      - "${_INGEST_SERVICE}"
+      - "--image=${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_AR_REPO}/feedback-ingest:latest"
+      - "--region=${_REGION}"
+      - "--service-account=${_RUNTIME_SA}"
+      - "--set-env-vars=PROJECT_ID=${_PROJECT_ID},FEEDBACK_TOPIC=${_FEEDBACK_TOPIC}"
+      - "--no-allow-unauthenticated"
+      - "--memory=256Mi"
+      - "--timeout=60s"
+      - "--project=${_PROJECT_ID}"
+
+  # -----------------------------
+  # Build sentiment handler image
+  # -----------------------------
+  - name: "gcr.io/cloud-builders/docker"
+    id: "build-sentiment-handler"
+    waitFor: ["create-feedback-topic"]
+    args:
+      - "build"
+      - "-t"
+      - "${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_AR_REPO}/sentiment-handler:latest"
+      - "./sentiment_handler"
+
+  # -----------------------------
+  # Push sentiment handler image
+  # -----------------------------
+  - name: "gcr.io/cloud-builders/docker"
+    id: "push-sentiment-handler"
+    waitFor: ["build-sentiment-handler"]
+    args:
+      - "push"
+      - "${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_AR_REPO}/sentiment-handler:latest"
+
+  # -----------------------------
+  # Deploy positive handler
+  # -----------------------------
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    id: "deploy-positive-handler"
+    waitFor: ["push-sentiment-handler"]
+    args:
+      - "gcloud"
+      - "run"
+      - "deploy"
+      - "${_POSITIVE_SERVICE}"
+      - "--image=${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_AR_REPO}/sentiment-handler:latest"
+      - "--region=${_REGION}"
+      - "--service-account=${_RUNTIME_SA}"
+      - "--set-env-vars=PROJECT_ID=${_PROJECT_ID},TARGET_SENTIMENT=positive,SLACK_WEBHOOK_SECRET=${_FOLLOWUP_SECRET}"
+      - "--no-allow-unauthenticated"
+      - "--memory=256Mi"
+      - "--timeout=60s"
+      - "--project=${_PROJECT_ID}"
+
+  # -----------------------------
+  # Deploy negative handler
+  # -----------------------------
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    id: "deploy-negative-handler"
+    waitFor: ["push-sentiment-handler"]
+    args:
+      - "gcloud"
+      - "run"
+      - "deploy"
+      - "${_NEGATIVE_SERVICE}"
+      - "--image=${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_AR_REPO}/sentiment-handler:latest"
+      - "--region=${_REGION}"
+      - "--service-account=${_RUNTIME_SA}"
+      - "--set-env-vars=PROJECT_ID=${_PROJECT_ID},TARGET_SENTIMENT=negative,SLACK_WEBHOOK_SECRET=${_SUPPORT_SECRET}"
+      - "--no-allow-unauthenticated"
+      - "--memory=256Mi"
+      - "--timeout=60s"
+      - "--project=${_PROJECT_ID}"
+
+  # -----------------------------
+  # Create positive push subscription
+  # -----------------------------
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    id: "create-positive-sub"
+    waitFor: ["deploy-positive-handler"]
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        POSITIVE_URL=$(gcloud run services describe ${_POSITIVE_SERVICE} \
+          --region=${_REGION} \
+          --project=${_PROJECT_ID} \
+          --format='value(status.url)')
+
+        gcloud pubsub subscriptions describe ${_POSITIVE_SUB} \
+          --project=${_PROJECT_ID} >/dev/null 2>&1 \
+        || gcloud pubsub subscriptions create ${_POSITIVE_SUB} \
+          --topic=${_FEEDBACK_TOPIC} \
+          --push-endpoint=${POSITIVE_URL} \
+          --push-auth-service-account=${_RUNTIME_SA} \
+          --ack-deadline=60 \
+          --project=${_PROJECT_ID}
+
+  # -----------------------------
+  # Create negative push subscription
+  # -----------------------------
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    id: "create-negative-sub"
+    waitFor: ["deploy-negative-handler"]
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        NEGATIVE_URL=$(gcloud run services describe ${_NEGATIVE_SERVICE} \
+          --region=${_REGION} \
+          --project=${_PROJECT_ID} \
+          --format='value(status.url)')
+
+        gcloud pubsub subscriptions describe ${_NEGATIVE_SUB} \
+          --project=${_PROJECT_ID} >/dev/null 2>&1 \
+        || gcloud pubsub subscriptions create ${_NEGATIVE_SUB} \
+          --topic=${_FEEDBACK_TOPIC} \
+          --push-endpoint=${NEGATIVE_URL} \
+          --push-auth-service-account=${_RUNTIME_SA} \
+          --ack-deadline=60 \
+          --project=${_PROJECT_ID}
+
+images:
+  - "${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_AR_REPO}/feedback-ingest:latest"
+  - "${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_AR_REPO}/sentiment-handler:latest"
+
+options:
+  logging: CLOUD_LOGGING_ONLY
