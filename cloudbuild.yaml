@@ -154,7 +154,7 @@ steps:
           --project=${_PROJECT_ID} >/dev/null 2>&1 \
         || gcloud pubsub subscriptions create ${_POSITIVE_SUB} \
           --topic=${_FEEDBACK_TOPIC} \
-          --push-endpoint=${POSITIVE_URL} \
+          --push-endpoint=$$POSITIVE_URL \
           --push-auth-service-account=${_RUNTIME_SA} \
           --ack-deadline=60 \
           --project=${_PROJECT_ID}
@@ -178,7 +178,7 @@ steps:
           --project=${_PROJECT_ID} >/dev/null 2>&1 \
         || gcloud pubsub subscriptions create ${_NEGATIVE_SUB} \
           --topic=${_FEEDBACK_TOPIC} \
-          --push-endpoint=${NEGATIVE_URL} \
+          --push-endpoint=$$NEGATIVE_URL \
           --push-auth-service-account=${_RUNTIME_SA} \
           --ack-deadline=60 \
           --project=${_PROJECT_ID}
