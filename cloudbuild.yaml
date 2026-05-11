@@ -13,8 +13,8 @@ substitutions:
   _POSITIVE_SERVICE: "positive-feedback-handler"
   _NEGATIVE_SERVICE: "negative-feedback-handler"
 
-  _FOLLOWUP_SECRET: "slack-followup-webhook"
-  _SUPPORT_SECRET: "slack-support-webhook"
+  _POSITIVE_SECRET: "slack-positive-webhook"
+  _NEGATIVE_SECRET: "slack-negative-webhook"
 
 steps:
   # -----------------------------
@@ -93,7 +93,7 @@ steps:
       - "--image=${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_AR_REPO}/sentiment-handler:latest"
       - "--region=${_REGION}"
       - "--service-account=${_RUNTIME_SA}"
-      - "--set-env-vars=PROJECT_ID=${_PROJECT_ID},TARGET_SENTIMENT=positive,SLACK_WEBHOOK_SECRET=${_FOLLOWUP_SECRET}"
+      - "--set-env-vars=PROJECT_ID=${_PROJECT_ID},TARGET_SENTIMENT=positive,SLACK_WEBHOOK_SECRET=${_POSITIVE_SECRET}"
       - "--no-allow-unauthenticated"
       - "--memory=256Mi"
       - "--timeout=60s"
@@ -113,7 +113,7 @@ steps:
       - "--image=${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_AR_REPO}/sentiment-handler:latest"
       - "--region=${_REGION}"
       - "--service-account=${_RUNTIME_SA}"
-      - "--set-env-vars=PROJECT_ID=${_PROJECT_ID},TARGET_SENTIMENT=negative,SLACK_WEBHOOK_SECRET=${_SUPPORT_SECRET}"
+      - "--set-env-vars=PROJECT_ID=${_PROJECT_ID},TARGET_SENTIMENT=negative,SLACK_WEBHOOK_SECRET=${_NEGATIVE_SECRET}"
       - "--no-allow-unauthenticated"
       - "--memory=256Mi"
       - "--timeout=60s"
