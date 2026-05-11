@@ -1,0 +1,11 @@
+Postman
+   ↓
+feedback-ingest-service
+   ↓ publishes
+feedback-topic
+   ↓                 ↓
+positive-sub        negative-sub
+   ↓                 ↓
+positive-handler    negative-handler
+   ↓                 ↓
+Slack #followup     Slack #support
